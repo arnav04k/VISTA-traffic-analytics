@@ -55,6 +55,22 @@
     <div class="form-submit"><button class="button button-dark" type="submit" id="analyze-button">Run analysis <span>↗</span></button><span>Python processes the clip here. Keep this tab open until the result appears.</span></div>
   </form>
   <aside class="analyze-aside">
+    <section class="panel line-preview-panel">
+      <div class="panel-top"><div><span class="eyebrow">LINE PLACEMENT</span><h2>Preview</h2></div><span class="badge">LIVE</span></div>
+      <div class="line-preview" id="line-preview">
+        <img id="line-preview-img" alt="Line placement preview">
+        <svg id="line-preview-svg" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true"></svg>
+        <div id="line-preview-empty" class="line-preview-empty">Uploaded footage has no preview frame until after analysis. The lines still apply to your video.</div>
+      </div>
+      <div class="line-preview-legend">
+        <span><i style="background:#14d2e1"></i>Counting line</span>
+        <span><i style="background:#dabe36"></i>Stop zone</span>
+        <span><i style="background:#ff8000"></i>Slow band</span>
+        <span><i style="background:#b16be0"></i>2nd line</span>
+        <span><i style="background:#5ca897"></i>Speed ref</span>
+      </div>
+      <p class="panel-caption">Lines update live as you change the form values, so you can place them before running.</p>
+    </section>
     <div class="panel preview-panel">
       {% for key, item in sources.items() %}<div class="preview-item preview-{{ key }}"><div class="panel-top"><div><span class="eyebrow">SOURCE PREVIEW</span><h3>{{ item[0] }}</h3></div><span class="badge">{{ 'SYNTHETIC TEST' if key == 'stop' else 'PUBLIC FOOTAGE' }}</span></div><video controls preload="none" poster="{{ url_for('static', filename=posters[key]) }}"><source src="{{ url_for('sample_video', source_key=key) }}" type="video/mp4"></video><p>{{ item[2] }}. Source and license details are recorded with the sample files.</p></div>{% endfor %}
       <div class="preview-item preview-upload"><div class="panel-top"><div><span class="eyebrow">YOUR FOOTAGE</span><h3>Upload a fixed-camera clip</h3></div></div><p>Choose a file in the form. Its analysis and saved evidence stay on this computer.</p></div>
@@ -62,4 +78,125 @@
     <div class="side-note"><span class="eyebrow">HOW TO READ THE OUTPUT</span><h3>A count needs its context.</h3><p>VISTA records a crossing when a tracked vehicle moves across your line. The run page keeps the timestamp, direction, ID, and annotated footage together.</p><div class="note-rule"></div><p class="small">Visible stops use low motion in image pixels. They are not measured road speed or delay.</p></div>
   </aside>
 </div>
+<script>
+(function () {
+  const POSTER_URLS = {
+  {%- for key, file in posters.items() %}
+    "{{ key }}": "{{ url_for('static', filename=file) }}",
+  {%- endfor %}
+  };
+  const SCENE_PRESETS = {{ scene_presets | tojson }};
+  const img = document.getElementById('line-preview-img');
+  const svg = document.getElementById('line-preview-svg');
+  const empty = document.getElementById('line-preview-empty');
+
+  const SVG = 'http://www.w3.org/2000/svg';
+  function el(name) { return document.createElementNS(SVG, name); }
+  function num(name, fallback) {
+    const field = document.querySelector('[name="' + name + '"]');
+    const value = field ? parseFloat(field.value) : NaN;
+    return Number.isFinite(value) ? value : fallback;
+  }
+  function strokeLine(color, dash) {
+    const l = el('line');
+    l.setAttribute('stroke', color);
+    l.setAttribute('stroke-width', '1.3');
+    l.setAttribute('vector-effect', 'non-scaling-stroke');
+    if (dash) l.setAttribute('stroke-dasharray', '3 3');
+    return l;
+  }
+
+  function draw() {
+    const sourceEl = document.querySelector('input[name="source"]:checked');
+    const sourceKey = sourceEl ? sourceEl.value : null;
+    if (sourceKey && POSTER_URLS[sourceKey]) {
+      img.src = POSTER_URLS[sourceKey];
+      img.style.display = 'block';
+      empty.style.display = 'none';
+    } else {
+      img.style.display = 'none';
+      empty.style.display = 'block';
+    }
+
+    svg.innerHTML = '';
+    const frag = document.createDocumentFragment();
+
+    const usePreset = document.querySelector('input[name="use_scene_preset"]').checked;
+    let axis, lineAt, zone;
+    if (usePreset && sourceKey && SCENE_PRESETS[sourceKey]) {
+      const p = SCENE_PRESETS[sourceKey];
+      axis = p[0]; lineAt = p[1]; zone = p[2];
+    } else {
+      axis = document.querySelector('[name="axis"]').value;
+      lineAt = num('line_at', 0.6);
+      zone = [num('zone_x1', 0.45), num('zone_y1', 0.05), num('zone_x2', 1.0), num('zone_y2', 1.0)];
+    }
+
+    const z = el('rect');
+    z.setAttribute('x', zone[0] * 100); z.setAttribute('y', zone[1] * 100);
+    z.setAttribute('width', (zone[2] - zone[0]) * 100); z.setAttribute('height', (zone[3] - zone[1]) * 100);
+    z.setAttribute('fill', '#dabe36'); z.setAttribute('fill-opacity', '0.14');
+    z.setAttribute('stroke', '#dabe36'); z.setAttribute('stroke-width', '1.3');
+    z.setAttribute('vector-effect', 'non-scaling-stroke');
+    frag.appendChild(z);
+
+    const line = strokeLine('#14d2e1', false);
+    if (axis === 'x') { line.setAttribute('x1', lineAt * 100); line.setAttribute('y1', 0); line.setAttribute('x2', lineAt * 100); line.setAttribute('y2', 100); }
+    else { line.setAttribute('x1', 0); line.setAttribute('y1', lineAt * 100); line.setAttribute('x2', 100); line.setAttribute('y2', lineAt * 100); }
+    frag.appendChild(line);
+
+    const line2Axis = document.querySelector('[name="line2_axis"]').value;
+    if (line2Axis) {
+      const at = num('line2_at', 0.4);
+      const l2 = strokeLine('#b16be0', true);
+      if (line2Axis === 'x') { l2.setAttribute('x1', at * 100); l2.setAttribute('y1', 0); l2.setAttribute('x2', at * 100); l2.setAttribute('y2', 100); }
+      else { l2.setAttribute('x1', 0); l2.setAttribute('y1', at * 100); l2.setAttribute('x2', 100); l2.setAttribute('y2', at * 100); }
+      frag.appendChild(l2);
+    }
+
+    const slowAxis = document.querySelector('[name="slow_axis"]').value;
+    if (slowAxis) {
+      const s1 = num('slow_start', 0.35), s2 = num('slow_end', 0.65);
+      const b1 = strokeLine('#ff8000', false), b2 = strokeLine('#ff8000', false);
+      if (slowAxis === 'x') {
+        b1.setAttribute('x1', s1 * 100); b1.setAttribute('y1', 0); b1.setAttribute('x2', s1 * 100); b1.setAttribute('y2', 100);
+        b2.setAttribute('x1', s2 * 100); b2.setAttribute('y1', 0); b2.setAttribute('x2', s2 * 100); b2.setAttribute('y2', 100);
+      } else {
+        b1.setAttribute('x1', 0); b1.setAttribute('y1', s1 * 100); b1.setAttribute('x2', 100); b1.setAttribute('y2', s1 * 100);
+        b2.setAttribute('x1', 0); b2.setAttribute('y1', s2 * 100); b2.setAttribute('x2', 100); b2.setAttribute('y2', s2 * 100);
+      }
+      frag.appendChild(b1); frag.appendChild(b2);
+    }
+
+    if (num('ref_length_m', 0) > 0) {
+      const p1x = num('ref_p1_x', 0.2), p1y = num('ref_p1_y', 0.8);
+      const p2x = num('ref_p2_x', 0.8), p2y = num('ref_p2_y', 0.8);
+      const conn = strokeLine('#5ca897', true);
+      conn.setAttribute('x1', p1x * 100); conn.setAttribute('y1', p1y * 100); conn.setAttribute('x2', p2x * 100); conn.setAttribute('y2', p2y * 100);
+      frag.appendChild(conn);
+      for (const [cx, cy] of [[p1x, p1y], [p2x, p2y]]) {
+        const c = el('circle');
+        c.setAttribute('cx', cx * 100); c.setAttribute('cy', cy * 100); c.setAttribute('r', '1.7');
+        c.setAttribute('fill', '#5ca897');
+        frag.appendChild(c);
+      }
+    }
+
+    svg.appendChild(frag);
+  }
+
+  const fieldNames = ['axis', 'line_at', 'zone_x1', 'zone_y1', 'zone_x2', 'zone_y2',
+    'line2_axis', 'line2_at', 'slow_axis', 'slow_start', 'slow_end',
+    'ref_length_m', 'ref_p1_x', 'ref_p1_y', 'ref_p2_x', 'ref_p2_y'];
+  fieldNames.forEach(function (name) {
+    const field = document.querySelector('[name="' + name + '"]');
+    if (field) { field.addEventListener('input', draw); field.addEventListener('change', draw); }
+  });
+  document.querySelectorAll('input[name="source"], input[name="use_scene_preset"]').forEach(function (field) {
+    field.addEventListener('change', draw);
+  });
+
+  draw();
+})();
+</script>
 {% endblock %}

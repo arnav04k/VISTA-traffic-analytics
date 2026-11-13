@@ -65,6 +65,7 @@ def create_app(data_dir: Path | None = None, process_fn=process_video) -> Flask:
     app = Flask(__name__, template_folder=str(HERE / "web_ui" / "templates"),
                 static_folder=str(HERE / "web_ui" / "static"))
     app.config["MAX_CONTENT_LENGTH"] = 250 * 1024 * 1024
+    app.jinja_env.auto_reload = True
     runs = data / "runs"
     observations = data / "observations"
     actions_folder = data / "actions"
@@ -202,6 +203,7 @@ def create_app(data_dir: Path | None = None, process_fn=process_video) -> Flask:
             selected = "signal"
         return render_template("analyze.html", page="analyze", selected=selected,
                                sources=SOURCE_DATA, posters=SOURCE_POSTERS,
+                               scene_presets=SCENE_PRESETS,
                                error=request.args.get("error"))
 
     @app.post("/analyze/run", endpoint="run_analysis")
