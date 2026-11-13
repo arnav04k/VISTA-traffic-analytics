@@ -21,6 +21,8 @@
         <a class="nav-item " href="/"><span class="nav-icon">▦</span> Overview</a>
         <a class="nav-item " href="/analyze/"><span class="nav-icon">◉</span> Analyze footage</a>
         <a class="nav-item active" href="/runs/"><span class="nav-icon">≡</span> Review runs</a>
+        <a class="nav-item " href="/batch"><span class="nav-icon">▥</span> Batch</a>
+        <a class="nav-item " href="/live"><span class="nav-icon">●</span> Live</a>
         <a class="nav-item " href="/actions/"><span class="nav-icon">↗</span> Action center</a>
         <a class="nav-item " href="/observations/"><span class="nav-icon">⌖</span> Road observations</a>
         <a class="nav-item " href="/benchmark/"><span class="nav-icon">▤</span> Benchmark</a>
@@ -34,45 +36,21 @@
       </header>
       <main class="content">
 <div class="page-heading"><div><span class="eyebrow">ANALYSIS LIBRARY / 02</span><h1>Review runs</h1><p>Each run keeps the model settings, footage, tracked events, and export files together.</p></div><a class="button button-dark" href="/analyze/">Python analysis setup <span>↗</span></a></div>
-<div class="section-heading tight"><div><span class="eyebrow">SAVED LOCALLY</span><h2>8 analysis runs</h2></div></div>
+<div class="section-heading tight"><div><span class="eyebrow">SAVED LOCALLY</span><h2>25 analysis runs</h2></div></div>
 <div class="panel runs-table-wrap">
   <table class="data-table runs-table"><thead><tr><th>RUN / SOURCE</th><th>MODEL</th><th>FOOTAGE</th><th>CROSSINGS</th><th>VISIBLE STOPS</th><th></th></tr></thead><tbody>
-  
-  <tr><td><a class="table-primary" href="/runs/cuttack_yolo26s/">cuttack link road 30s.mp4</a><span class="table-secondary">cuttack yolo26s</span></td>
-    <td><span class="model-pill">YOLO26s</span></td>
-    <td>30.0 s <span class="table-secondary">300 frames</span></td>
-    <td class="table-number">3</td><td class="table-number">29</td>
-    <td><a class="row-arrow" href="/runs/cuttack_yolo26s/" aria-label="Open cuttack_yolo26s">↗</a></td></tr>
-  
-  <tr><td><a class="table-primary" href="/runs/bengaluru_night_yolo26s/">bengaluru night 20s.mp4</a><span class="table-secondary">bengaluru night yolo26s</span></td>
-    <td><span class="model-pill">YOLO26s</span></td>
-    <td>20.0 s <span class="table-secondary">200 frames</span></td>
-    <td class="table-number">18</td><td class="table-number">16</td>
-    <td><a class="row-arrow" href="/runs/bengaluru_night_yolo26s/" aria-label="Open bengaluru_night_yolo26s">↗</a></td></tr>
-  
-  <tr><td><a class="table-primary" href="/runs/kumasi_pothole_yolo26s/">kumasi pothole 10fps.mp4</a><span class="table-secondary">kumasi pothole yolo26s</span></td>
-    <td><span class="model-pill">YOLO26s</span></td>
-    <td>20.7 s <span class="table-secondary">207 frames</span></td>
-    <td class="table-number">10</td><td class="table-number">1</td>
-    <td><a class="row-arrow" href="/runs/kumasi_pothole_yolo26s/" aria-label="Open kumasi_pothole_yolo26s">↗</a></td></tr>
-  
-  <tr><td><a class="table-primary" href="/runs/colonel_by_yolo26s_final/">colonel by signal 10fps.mp4</a><span class="table-secondary">colonel by yolo26s final</span></td>
-    <td><span class="model-pill">YOLO26s</span></td>
-    <td>20.0 s <span class="table-secondary">200 frames</span></td>
-    <td class="table-number">7</td><td class="table-number">0</td>
-    <td><a class="row-arrow" href="/runs/colonel_by_yolo26s_final/" aria-label="Open colonel_by_yolo26s_final">↗</a></td></tr>
-  
-  <tr><td><a class="table-primary" href="/runs/colonel_by_yolov8n_baseline/">colonel by signal 10fps.mp4</a><span class="table-secondary">colonel by yolov8n baseline</span></td>
-    <td><span class="model-pill">YOLOv8n</span></td>
-    <td>20.0 s <span class="table-secondary">200 frames</span></td>
-    <td class="table-number">7</td><td class="table-number">0</td>
-    <td><a class="row-arrow" href="/runs/colonel_by_yolov8n_baseline/" aria-label="Open colonel_by_yolov8n_baseline">↗</a></td></tr>
   
   <tr><td><a class="table-primary" href="/runs/stopped_yolo26s/">stopped demo.mp4</a><span class="table-secondary">stopped yolo26s</span></td>
     <td><span class="model-pill">YOLO26s</span></td>
     <td>6.0 s <span class="table-secondary">60 frames</span></td>
     <td class="table-number">0</td><td class="table-number">1</td>
     <td><a class="row-arrow" href="/runs/stopped_yolo26s/" aria-label="Open stopped_yolo26s">↗</a></td></tr>
+  
+  <tr><td><a class="table-primary" href="/runs/kumasi_pothole_yolo26s/">kumasi pothole 10fps.mp4</a><span class="table-secondary">kumasi pothole yolo26s</span></td>
+    <td><span class="model-pill">YOLO26s</span></td>
+    <td>20.7 s <span class="table-secondary">207 frames</span></td>
+    <td class="table-number">10</td><td class="table-number">1</td>
+    <td><a class="row-arrow" href="/runs/kumasi_pothole_yolo26s/" aria-label="Open kumasi_pothole_yolo26s">↗</a></td></tr>
   
   <tr><td><a class="table-primary" href="/runs/intel_yolov8n_baseline/">intel car detection.mp4</a><span class="table-secondary">intel yolov8n baseline</span></td>
     <td><span class="model-pill">YOLOv8n</span></td>
@@ -85,6 +63,132 @@
     <td>30.16 s <span class="table-secondary">377 frames</span></td>
     <td class="table-number">4</td><td class="table-number">0</td>
     <td><a class="row-arrow" href="/runs/intel_yolo26s_measured/" aria-label="Open intel_yolo26s_measured">↗</a></td></tr>
+  
+  <tr><td><a class="table-primary" href="/runs/cuttack_yolo26s/">cuttack link road 30s.mp4</a><span class="table-secondary">cuttack yolo26s</span></td>
+    <td><span class="model-pill">YOLO26s</span></td>
+    <td>30.0 s <span class="table-secondary">300 frames</span></td>
+    <td class="table-number">3</td><td class="table-number">29</td>
+    <td><a class="row-arrow" href="/runs/cuttack_yolo26s/" aria-label="Open cuttack_yolo26s">↗</a></td></tr>
+  
+  <tr><td><a class="table-primary" href="/runs/colonel_by_yolov8n_baseline/">colonel by signal 10fps.mp4</a><span class="table-secondary">colonel by yolov8n baseline</span></td>
+    <td><span class="model-pill">YOLOv8n</span></td>
+    <td>20.0 s <span class="table-secondary">200 frames</span></td>
+    <td class="table-number">7</td><td class="table-number">0</td>
+    <td><a class="row-arrow" href="/runs/colonel_by_yolov8n_baseline/" aria-label="Open colonel_by_yolov8n_baseline">↗</a></td></tr>
+  
+  <tr><td><a class="table-primary" href="/runs/colonel_by_yolo26s_final/">colonel by signal 10fps.mp4</a><span class="table-secondary">colonel by yolo26s final</span></td>
+    <td><span class="model-pill">YOLO26s</span></td>
+    <td>20.0 s <span class="table-secondary">200 frames</span></td>
+    <td class="table-number">7</td><td class="table-number">0</td>
+    <td><a class="row-arrow" href="/runs/colonel_by_yolo26s_final/" aria-label="Open colonel_by_yolo26s_final">↗</a></td></tr>
+  
+  <tr><td><a class="table-primary" href="/runs/bengaluru_night_yolo26s/">bengaluru night 20s.mp4</a><span class="table-secondary">bengaluru night yolo26s</span></td>
+    <td><span class="model-pill">YOLO26s</span></td>
+    <td>20.0 s <span class="table-secondary">200 frames</span></td>
+    <td class="table-number">18</td><td class="table-number">16</td>
+    <td><a class="row-arrow" href="/runs/bengaluru_night_yolo26s/" aria-label="Open bengaluru_night_yolo26s">↗</a></td></tr>
+  
+  <tr><td><a class="table-primary" href="/runs/run_20261114_025700_bb4b5d">kumasi pothole 10fps.mp4</a><span class="table-secondary">run 20261114 025700 bb4b5d</span></td>
+    <td><span class="model-pill">YOLO26s</span></td>
+    <td>20.7 s <span class="table-secondary">207 frames</span></td>
+    <td class="table-number">9</td><td class="table-number">9</td>
+    <td><a class="row-arrow" href="/runs/run_20261114_025700_bb4b5d" aria-label="Open run_20261114_025700_bb4b5d">↗</a></td></tr>
+  
+  <tr><td><a class="table-primary" href="/runs/run_20261114_025513_21302d">kumasi pothole 10fps.mp4</a><span class="table-secondary">run 20261114 025513 21302d</span></td>
+    <td><span class="model-pill">YOLO26s</span></td>
+    <td>20.7 s <span class="table-secondary">207 frames</span></td>
+    <td class="table-number">7</td><td class="table-number">1</td>
+    <td><a class="row-arrow" href="/runs/run_20261114_025513_21302d" aria-label="Open run_20261114_025513_21302d">↗</a></td></tr>
+  
+  <tr><td><a class="table-primary" href="/runs/run_20261114_025224_948d72">kumasi pothole 10fps.mp4</a><span class="table-secondary">run 20261114 025224 948d72</span></td>
+    <td><span class="model-pill">YOLO26s</span></td>
+    <td>20.7 s <span class="table-secondary">207 frames</span></td>
+    <td class="table-number">6</td><td class="table-number">58</td>
+    <td><a class="row-arrow" href="/runs/run_20261114_025224_948d72" aria-label="Open run_20261114_025224_948d72">↗</a></td></tr>
+  
+  <tr><td><a class="table-primary" href="/runs/run_20261114_022529_f5871d">bengaluru night 20s.mp4</a><span class="table-secondary">run 20261114 022529 f5871d</span></td>
+    <td><span class="model-pill">YOLO26s</span></td>
+    <td>20.0 s <span class="table-secondary">200 frames</span></td>
+    <td class="table-number">19</td><td class="table-number">17</td>
+    <td><a class="row-arrow" href="/runs/run_20261114_022529_f5871d" aria-label="Open run_20261114_022529_f5871d">↗</a></td></tr>
+  
+  <tr><td><a class="table-primary" href="/runs/run_20261114_022513_7bdff0">bengaluru night 20s.mp4</a><span class="table-secondary">run 20261114 022513 7bdff0</span></td>
+    <td><span class="model-pill">YOLO26s</span></td>
+    <td>20.0 s <span class="table-secondary">200 frames</span></td>
+    <td class="table-number">19</td><td class="table-number">17</td>
+    <td><a class="row-arrow" href="/runs/run_20261114_022513_7bdff0" aria-label="Open run_20261114_022513_7bdff0">↗</a></td></tr>
+  
+  <tr><td><a class="table-primary" href="/runs/run_20261114_022509_60973b">bengaluru night 20s.mp4</a><span class="table-secondary">run 20261114 022509 60973b</span></td>
+    <td><span class="model-pill">YOLO26s</span></td>
+    <td>20.0 s <span class="table-secondary">200 frames</span></td>
+    <td class="table-number">19</td><td class="table-number">17</td>
+    <td><a class="row-arrow" href="/runs/run_20261114_022509_60973b" aria-label="Open run_20261114_022509_60973b">↗</a></td></tr>
+  
+  <tr><td><a class="table-primary" href="/runs/run_20261114_021112_3cd10c">kumasi pothole 10fps.mp4</a><span class="table-secondary">run 20261114 021112 3cd10c</span></td>
+    <td><span class="model-pill">YOLO26s</span></td>
+    <td>20.7 s <span class="table-secondary">207 frames</span></td>
+    <td class="table-number">9</td><td class="table-number">1</td>
+    <td><a class="row-arrow" href="/runs/run_20261114_021112_3cd10c" aria-label="Open run_20261114_021112_3cd10c">↗</a></td></tr>
+  
+  <tr><td><a class="table-primary" href="/runs/run_20261114_003812_98243e">stopped demo.mp4</a><span class="table-secondary">run 20261114 003812 98243e</span></td>
+    <td><span class="model-pill">YOLO26s</span></td>
+    <td>6.0 s <span class="table-secondary">60 frames</span></td>
+    <td class="table-number">0</td><td class="table-number">1</td>
+    <td><a class="row-arrow" href="/runs/run_20261114_003812_98243e" aria-label="Open run_20261114_003812_98243e">↗</a></td></tr>
+  
+  <tr><td><a class="table-primary" href="/runs/run_20261113_233859_32f542">source.mp4</a><span class="table-secondary">run 20261113 233859 32f542</span></td>
+    <td><span class="model-pill">YOLO26s</span></td>
+    <td>170.13 s <span class="table-secondary">5104 frames</span></td>
+    <td class="table-number">32</td><td class="table-number">40</td>
+    <td><a class="row-arrow" href="/runs/run_20261113_233859_32f542" aria-label="Open run_20261113_233859_32f542">↗</a></td></tr>
+  
+  <tr><td><a class="table-primary" href="/runs/run_20261113_234428_4c2e4f">kumasi pothole 10fps.mp4</a><span class="table-secondary">run 20261113 234428 4c2e4f</span></td>
+    <td><span class="model-pill">YOLO26s</span></td>
+    <td>20.7 s <span class="table-secondary">207 frames</span></td>
+    <td class="table-number">9</td><td class="table-number">1</td>
+    <td><a class="row-arrow" href="/runs/run_20261113_234428_4c2e4f" aria-label="Open run_20261113_234428_4c2e4f">↗</a></td></tr>
+  
+  <tr><td><a class="table-primary" href="/runs/run_20261113_234427_f11b14">kumasi pothole 10fps.mp4</a><span class="table-secondary">run 20261113 234427 f11b14</span></td>
+    <td><span class="model-pill">YOLO26s</span></td>
+    <td>20.7 s <span class="table-secondary">207 frames</span></td>
+    <td class="table-number">9</td><td class="table-number">1</td>
+    <td><a class="row-arrow" href="/runs/run_20261113_234427_f11b14" aria-label="Open run_20261113_234427_f11b14">↗</a></td></tr>
+  
+  <tr><td><a class="table-primary" href="/runs/run_20261113_233343_d30ab5">colonel by signal 10fps.mp4</a><span class="table-secondary">run 20261113 233343 d30ab5</span></td>
+    <td><span class="model-pill">YOLO26s</span></td>
+    <td>20.0 s <span class="table-secondary">200 frames</span></td>
+    <td class="table-number">7</td><td class="table-number">0</td>
+    <td><a class="row-arrow" href="/runs/run_20261113_233343_d30ab5" aria-label="Open run_20261113_233343_d30ab5">↗</a></td></tr>
+  
+  <tr><td><a class="table-primary" href="/runs/run_20261113_233208_fe3f4e">colonel by signal 10fps.mp4</a><span class="table-secondary">run 20261113 233208 fe3f4e</span></td>
+    <td><span class="model-pill">YOLO26s</span></td>
+    <td>20.0 s <span class="table-secondary">200 frames</span></td>
+    <td class="table-number">7</td><td class="table-number">0</td>
+    <td><a class="row-arrow" href="/runs/run_20261113_233208_fe3f4e" aria-label="Open run_20261113_233208_fe3f4e">↗</a></td></tr>
+  
+  <tr><td><a class="table-primary" href="/runs/run_20261113_232521_6fade1">cuttack link road 30s.mp4</a><span class="table-secondary">run 20261113 232521 6fade1</span></td>
+    <td><span class="model-pill">YOLO26s</span></td>
+    <td>30.0 s <span class="table-secondary">300 frames</span></td>
+    <td class="table-number">0</td><td class="table-number">28</td>
+    <td><a class="row-arrow" href="/runs/run_20261113_232521_6fade1" aria-label="Open run_20261113_232521_6fade1">↗</a></td></tr>
+  
+  <tr><td><a class="table-primary" href="/runs/run_20261113_232244_ed70e5">cuttack link road 30s.mp4</a><span class="table-secondary">run 20261113 232244 ed70e5</span></td>
+    <td><span class="model-pill">YOLO26s</span></td>
+    <td>30.0 s <span class="table-secondary">300 frames</span></td>
+    <td class="table-number">4</td><td class="table-number">27</td>
+    <td><a class="row-arrow" href="/runs/run_20261113_232244_ed70e5" aria-label="Open run_20261113_232244_ed70e5">↗</a></td></tr>
+  
+  <tr><td><a class="table-primary" href="/runs/run_20261113_231857_fd4987">cuttack link road 30s.mp4</a><span class="table-secondary">run 20261113 231857 fd4987</span></td>
+    <td><span class="model-pill">YOLO26s</span></td>
+    <td>30.0 s <span class="table-secondary">300 frames</span></td>
+    <td class="table-number">4</td><td class="table-number">27</td>
+    <td><a class="row-arrow" href="/runs/run_20261113_231857_fd4987" aria-label="Open run_20261113_231857_fd4987">↗</a></td></tr>
+  
+  <tr><td><a class="table-primary" href="/runs/run_20261113_225953_b0e3a5">intel car detection.mp4</a><span class="table-secondary">run 20261113 225953 b0e3a5</span></td>
+    <td><span class="model-pill">YOLO26s</span></td>
+    <td>30.16 s <span class="table-secondary">377 frames</span></td>
+    <td class="table-number">4</td><td class="table-number">0</td>
+    <td><a class="row-arrow" href="/runs/run_20261113_225953_b0e3a5" aria-label="Open run_20261113_225953_b0e3a5">↗</a></td></tr>
   
   </tbody></table>
 </div>

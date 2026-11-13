@@ -45,6 +45,8 @@ def clean_for_public(page: str) -> str:
     page = page.replace('>New analysis <span>↗</span></a>', '>Python analysis setup <span>↗</span></a>')
     page = page.replace('>Analyze a video <span aria-hidden="true">↗</span></a>',
                         '>Python analysis setup <span aria-hidden="true">↗</span></a>')
+    page = re.sub(r'<script>.*?</script>', '', page, flags=re.S)
+    page = re.sub(r'<section class="panel line-preview-panel">.*?</section>', '', page, flags=re.S)
     return page
 
 
@@ -90,9 +92,9 @@ def main() -> None:
         dashboard = target / "dashboard.html"
         if dashboard.exists():
             dashboard.write_text(re.sub(r'<input id="search"[^>]*>\s*', '',
-                                        re.sub(r'<script>.*?</script>', '', dashboard.read_text(), flags=re.S)))
+                                        re.sub(r'<script>.*?</script>', '', dashboard.read_text(encoding="utf-8"), flags=re.S)), encoding="utf-8")
         import json
-        summary = json.loads((folder / "summary.json").read_text())
+        summary = json.loads((folder / "summary.json").read_text(encoding="utf-8"))
         routes[f"{route}/video"] = f"/archive/runs/{run_id}/{Path(summary['video']).name}"
         for kind, filename in {
             "video": Path(summary["video"]).name, "events": "events.csv", "tracks": "tracks.csv",
@@ -155,15 +157,15 @@ def main() -> None:
                           '<div><b>02</b><span>Start the local dashboard</span></div>'
                           '<div><b>03</b><span>Run a sample or upload footage</span></div></div>'
                           '<pre class="setup-command">cd phase2_prototype\npython3 -m venv .venv\n.venv/bin/pip install -r requirements.txt\n.venv/bin/python web_app.py</pre>'
-                          '<a class="button button-dark" href="https://github.com/JatinAggarwal5320/VISTA-vehicle-intelligence-traffic-analytics/tree/main/phase2_prototype">Open Python setup ↗</a></div>',
+                          '<a class="button button-dark" href="https://github.com/arnav04k/VISTA-traffic-analytics/tree/main/phase2_prototype">Open Python setup ↗</a></div>',
                           page, flags=re.S)
         page = re.sub(r'((?:href|src|poster)=")(/[^"]*)"', rewrite, page)
         target.parent.mkdir(parents=True, exist_ok=True)
-        target.write_text(page)
+        target.write_text(page, encoding="utf-8")
 
     guide = PUBLIC / "guide" / "index.html"
     guide.parent.mkdir(parents=True, exist_ok=True)
-    guide.write_text('''<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>VISTA · Local project</title><link rel="stylesheet" href="/static/style.css"><main class="content" style="max-width:760px"><span class="eyebrow">LOCAL PYTHON PROJECT</span><h1>Create a road observation</h1><p>The public evidence viewer cannot save a new observation. Run the Python app from the GitHub project to upload a photo or video, mark a defect, and generate an evidence report.</p><a class="button button-dark" href="https://github.com/JatinAggarwal5320/VISTA-vehicle-intelligence-traffic-analytics/tree/main/phase2_prototype">Open Python setup ↗</a> <a class="text-link" href="/observations/">← Back to observations</a></main></html>''')
+    guide.write_text('''<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>VISTA · Local project</title><link rel="stylesheet" href="/static/style.css"><main class="content" style="max-width:760px"><span class="eyebrow">LOCAL PYTHON PROJECT</span><h1>Create a road observation</h1><p>The public evidence viewer cannot save a new observation. Run the Python app from the GitHub project to upload a photo or video, mark a defect, and generate an evidence report.</p><a class="button button-dark" href="https://github.com/arnav04k/VISTA-traffic-analytics/tree/main/phase2_prototype">Open Python setup ↗</a> <a class="text-link" href="/observations/">← Back to observations</a></main></html>''', encoding="utf-8")
     print(f"Exported {len(output_pages)} dashboard pages and {len(records)} observation reports")
 
 
