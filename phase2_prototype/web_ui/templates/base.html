@@ -21,6 +21,8 @@
         <a class="nav-item {% if page == 'overview' %}active{% endif %}" href="{{ url_for('overview') }}"><span class="nav-icon">▦</span> Overview</a>
         <a class="nav-item {% if page == 'analyze' %}active{% endif %}" href="{{ url_for('analyze_page') }}"><span class="nav-icon">◉</span> Analyze footage</a>
         <a class="nav-item {% if page == 'runs' %}active{% endif %}" href="{{ url_for('runs_page') }}"><span class="nav-icon">≡</span> Review runs</a>
+        <a class="nav-item {% if page == 'batch' %}active{% endif %}" href="{{ url_for('batch_page') }}"><span class="nav-icon">▥</span> Batch</a>
+        <a class="nav-item {% if page == 'live' %}active{% endif %}" href="{{ url_for('live_page') }}"><span class="nav-icon">●</span> Live</a>
         <a class="nav-item {% if page == 'actions' %}active{% endif %}" href="{{ url_for('actions_page') }}"><span class="nav-icon">↗</span> Action center</a>
         <a class="nav-item {% if page == 'observations' %}active{% endif %}" href="{{ url_for('observations_page') }}"><span class="nav-icon">⌖</span> Road observations</a>
         <a class="nav-item {% if page == 'benchmark' %}active{% endif %}" href="{{ url_for('benchmark_page') }}"><span class="nav-icon">▤</span> Benchmark</a>

@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+{% block title %}Batch processing{% endblock %}
+{% block breadcrumb %}<a href="{{ url_for('runs_page') }}">Review runs</a><span class="slash">/</span>Batch{% endblock %}
+{% block content %}
+<div class="page-heading"><div><span class="eyebrow">BATCH / MULTIPLE CLIPS</span><h1>Batch processing</h1><p>Queue several videos at once. Each is analyzed with the same settings and saved as its own run.</p></div></div>
+{% if request.args.get('error') %}<div class="alert error">{{ request.args.get('error') }}</div>{% endif %}
+
+<section class="panel form-panel">
+  <div class="panel-top"><div><span class="eyebrow">NEW BATCH</span><h2>Choose your videos</h2></div></div>
+  <form action="{{ url_for('start_batch') }}" method="post" enctype="multipart/form-data">
+    <div class="form-grid">
+      <label class="field field-wide"><span class="field-label">VIDEO FILES (SELECT MULTIPLE)</span><input type="file" name="videos" accept=".mp4,.mov,.avi,.webm,video/*" multiple required><small>MP4 / MOV / AVI / WEBM · each up to 250 MB total request</small></label>
+      <label class="field"><span class="field-label">MODEL</span><select name="model"><option value="yolo26s">YOLO26s · primary</option><option value="yolov8n">YOLOv8n · baseline</option></select></label>
+      <label class="field"><span class="field-label">COUNTING LINE</span><select name="axis"><option value="y">Horizontal</option><option value="x">Vertical</option></select></label>
+      <label class="field"><span class="field-label">LINE POSITION (0–1)</span><input type="number" name="line_at" min="0.05" max="0.95" step="0.01" value="0.60"></label>
+      <label class="field"><span class="field-label">DETECTION CONFIDENCE</span><input type="number" name="confidence" min="0.05" max="0.70" step="0.05" value="0.25"></label>
+      <label class="field"><span class="field-label">FRAME LIMIT (0 = ALL)</span><input type="number" name="max_frames" min="0" step="100" value="0"></label>
+    </div>
+    <p class="muted">Stop zone, visible-stop rule, speed reference, and second line use the defaults for batch runs. Configure them per-run for finer control.</p>
+    <div class="form-submit"><button class="button button-dark" type="submit">Queue batch <span>↗</span></button></div>
+  </form>
+</section>
+
+{% if batch %}
+<section class="panel">
+  <div class="panel-top"><div><span class="eyebrow">BATCH {{ batch.id|upper }}</span><h2>Runs in this batch</h2></div><span class="badge">{{ batch.status|upper }}</span></div>
+  <div class="table-scroll"><table class="data-table"><thead><tr><th>RUN ID</th><th>SOURCE</th><th>CROSSINGS</th><th>STOPS</th><th>DURATION</th><th></th></tr></thead><tbody>
+  {% for run in run_list %}<tr><td class="mono">{{ run.id }}</td>{% if run.summary %}<td>{{ run.summary.source }}</td><td>{{ run.summary.crossings }}</td><td>{{ run.summary.stops }}</td><td>{{ run.summary.duration_s }} s</td><td><a class="text-link" href="{{ url_for('run_detail', run_id=run.id) }}">Open run →</a></td>{% else %}<td colspan="4" class="empty">Processing…</td><td></td>{% endif %}</tr>{% endfor %}
+  </tbody></table></div>
+</section>
+{% endif %}
+
+<section class="panel">
+  <div class="panel-top"><div><span class="eyebrow">HISTORY</span><h2>Past batches</h2></div></div>
+  {% if batches %}<div class="table-scroll"><table class="data-table"><thead><tr><th>BATCH</th><th>CREATED</th><th>STATUS</th><th>VIDEOS</th><th></th></tr></thead><tbody>{% for item in batches %}<tr><td class="mono">{{ item.id }}</td><td>{{ item.created_at }}</td><td><span class="badge">{{ item.status|upper }}</span></td><td>{{ item.run_ids|length }}</td><td><a class="text-link" href="{{ url_for('batch_detail', batch_id=item.id) }}">View →</a></td></tr>{% endfor %}</tbody></table></div>{% else %}<p class="empty">No batches yet. Queue your first batch above.</p>{% endif %}
+</section>
+{% endblock %}

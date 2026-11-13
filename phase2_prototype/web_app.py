@@ -9,13 +9,16 @@ import json
 import re
 import shutil
 import threading
+import time
 import uuid
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 from pathlib import Path
 
 from flask import Flask, Response, abort, jsonify, redirect, render_template, request, send_file, url_for
+from werkzeug.utils import secure_filename
 
+from dashboard import write_report
 from decision_engine import STATUSES, load_statuses, observation_action, save_status, traffic_action, traffic_brief_html
 from evaluation import evaluate_by_type
 from evaluate_run import read_labels
@@ -69,6 +72,8 @@ def create_app(data_dir: Path | None = None, process_fn=process_video) -> Flask:
     executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="vista-model")
     jobs: dict[str, dict] = {}
     jobs_lock = threading.Lock()
+    live: dict[str, object] = {"session": None}
+    live_lock = threading.Lock()
     app.extensions["vista_jobs"] = jobs
 
     def run_folder(run_id: str) -> Path:
@@ -145,6 +150,13 @@ def create_app(data_dir: Path | None = None, process_fn=process_video) -> Flask:
             action["review"] = statuses.get(action["id"], {"status": "open", "note": "", "updated_at": ""})
         return rows
 
+    def load_batches() -> list[dict]:
+        path = data / "batches.json"
+        return json.loads(path.read_text()) if path.exists() else []
+
+    def save_batches(batches: list[dict]) -> None:
+        (data / "batches.json").write_text(json.dumps(batches, indent=2) + "\n")
+
     @app.context_processor
     def common() -> dict:
         return {"project_name": "VISTA", "source_data": SOURCE_DATA}
@@ -218,6 +230,19 @@ def create_app(data_dir: Path | None = None, process_fn=process_video) -> Flask:
             if model_key not in ("yolo26s", "yolov8n"):
                 raise ValueError("Choose a valid model")
             frame_limit = int(form.get("max_frames") or 0)
+            ref_length = parsed_float(form, "ref_length_m", 0.0)
+            if ref_length:
+                ref_p1 = (parsed_float(form, "ref_p1_x", 0.0), parsed_float(form, "ref_p1_y", 0.0))
+                ref_p2 = (parsed_float(form, "ref_p2_x", 0.0), parsed_float(form, "ref_p2_y", 0.0))
+            else:
+                ref_p1 = ref_p2 = None
+            line2_axis = form.get("line2_axis") or None
+            line2_at = parsed_float(form, "line2_at", 0.40) if line2_axis else None
+            slow_axis = form.get("slow_axis") or None
+            slow_start = parsed_float(form, "slow_start", 0.35) if slow_axis else None
+            slow_end = parsed_float(form, "slow_end", 0.65) if slow_axis else None
+            slow_ratio = parsed_float(form, "slow_ratio", 0.50) if slow_axis else 0.5
+            slow_min_speed_px_s = parsed_float(form, "slow_min_px_s", 5.0) if slow_axis else 5.0
             config = RunConfig(
                 line_axis=axis, line_at=line_at, zone=zone,
                 model=str(data / f"{model_key}.pt"),
@@ -225,6 +250,11 @@ def create_app(data_dir: Path | None = None, process_fn=process_video) -> Flask:
                 stop_seconds=parsed_float(form, "stop_seconds", 2.0),
                 max_stationary_speed_px_s=parsed_float(form, "stationary_px_s", 8.0),
                 max_frames=frame_limit or None,
+                ref_p1=ref_p1, ref_p2=ref_p2,
+                ref_length_m=ref_length or None,
+                line2_axis=line2_axis, line2_at=line2_at,
+                slow_axis=slow_axis, slow_start=slow_start, slow_end=slow_end,
+                slow_ratio=slow_ratio, slow_min_speed_px_s=slow_min_speed_px_s,
             )
             config.validate()
         except (ValueError, TypeError) as error:
@@ -244,7 +274,8 @@ def create_app(data_dir: Path | None = None, process_fn=process_video) -> Flask:
         folder = runs / run_id
         folder.mkdir(parents=True)
         if source_key == "upload":
-            source = folder / f"source{suffix}"
+            safe_name = secure_filename(uploaded.filename) or f"source{suffix}"
+            source = folder / safe_name
             uploaded.save(source)
         if direct:
             try:
@@ -296,6 +327,111 @@ def create_app(data_dir: Path | None = None, process_fn=process_video) -> Flask:
     def runs_page():
         return render_template("runs.html", page="runs", runs=run_rows())
 
+    @app.get("/batch")
+    def batch_page():
+        return render_template("batch.html", page="batch", batches=list(reversed(load_batches())),
+                               batch=None, run_list=None)
+
+    @app.get("/batch/<batch_id>")
+    def batch_detail(batch_id: str):
+        batch = next((item for item in load_batches() if item["id"] == batch_id), None)
+        if batch is None:
+            abort(404)
+        run_list = []
+        for run_id in batch["run_ids"]:
+            summary_path = runs / run_id / "summary.json"
+            run_list.append({"id": run_id, "summary": json.loads(summary_path.read_text()) if summary_path.is_file() else None})
+        return render_template("batch.html", page="batch", batches=list(reversed(load_batches())),
+                               batch=batch, run_list=run_list)
+
+    @app.post("/analyze/batch")
+    def start_batch():
+        uploads = request.files.getlist("videos")
+        if not uploads or any(Path(upload.filename or "").suffix.lower() not in (".mp4", ".mov", ".avi", ".webm") for upload in uploads):
+            return redirect(url_for("analyze_page", error="Upload one or more MP4/MOV/AVI/WEBM videos for the batch."))
+        try:
+            axis = request.form.get("axis", "y")
+            line_at = parsed_float(request.form, "line_at", .60)
+            confidence = parsed_float(request.form, "confidence", .25)
+            zone = tuple(parsed_float(request.form, key, default) for key, default in (
+                ("zone_x1", .05), ("zone_y1", .05), ("zone_x2", .95), ("zone_y2", .90)))
+            model_key = request.form.get("model", "yolo26s")
+            if model_key not in ("yolo26s", "yolov8n"):
+                raise ValueError("Choose a valid model")
+            frame_limit = int(request.form.get("max_frames") or 0)
+            ref_length = parsed_float(request.form, "ref_length_m", 0.0)
+            ref_p1 = (parsed_float(request.form, "ref_p1_x", 0.0), parsed_float(request.form, "ref_p1_y", 0.0)) if ref_length else None
+            ref_p2 = (parsed_float(request.form, "ref_p2_x", 0.0), parsed_float(request.form, "ref_p2_y", 0.0)) if ref_length else None
+            line2_axis = request.form.get("line2_axis") or None
+            line2_at = parsed_float(request.form, "line2_at", 0.40) if line2_axis else None
+            slow_axis = request.form.get("slow_axis") or None
+            slow_start = parsed_float(request.form, "slow_start", 0.35) if slow_axis else None
+            slow_end = parsed_float(request.form, "slow_end", 0.65) if slow_axis else None
+            slow_ratio = parsed_float(request.form, "slow_ratio", 0.50) if slow_axis else 0.5
+            slow_min_speed_px_s = parsed_float(request.form, "slow_min_px_s", 5.0) if slow_axis else 5.0
+            config = RunConfig(
+                line_axis=axis, line_at=line_at, zone=zone, model=str(data / f"{model_key}.pt"),
+                confidence=confidence,
+                stop_seconds=parsed_float(request.form, "stop_seconds", 2.0),
+                max_stationary_speed_px_s=parsed_float(request.form, "stationary_px_s", 8.0),
+                max_frames=frame_limit or None,
+                ref_p1=ref_p1, ref_p2=ref_p2, ref_length_m=ref_length or None,
+                line2_axis=line2_axis, line2_at=line2_at,
+                slow_axis=slow_axis, slow_start=slow_start, slow_end=slow_end,
+                slow_ratio=slow_ratio, slow_min_speed_px_s=slow_min_speed_px_s,
+            )
+            config.validate()
+        except (ValueError, TypeError) as error:
+            return redirect(url_for("analyze_page", error=str(error)))
+
+        batch_id = uuid.uuid4().hex[:12]
+        run_ids: list[str] = []
+        sources: list[tuple[Path, str]] = []
+        for upload in uploads:
+            suffix = Path(upload.filename or "").suffix.lower()
+            run_id = f"run_{datetime.now():%Y%m%d_%H%M%S}_{uuid.uuid4().hex[:6]}"
+            folder = runs / run_id
+            folder.mkdir(parents=True)
+            source = folder / (secure_filename(upload.filename) or f"source{suffix}")
+            upload.save(source)
+            run_ids.append(run_id)
+            sources.append((source, run_id))
+        batches = load_batches()
+        batches.append({"id": batch_id, "created_at": datetime.now().astimezone().isoformat(timespec="seconds"),
+                        "status": "queued", "run_ids": run_ids})
+        save_batches(batches)
+
+        def update_batch(status: str) -> None:
+            current = load_batches()
+            for item in current:
+                if item["id"] == batch_id:
+                    item["status"] = status
+            save_batches(current)
+
+        with jobs_lock:
+            jobs[batch_id] = {"status": "queued", "done": 0, "total": len(sources), "batch": True}
+
+        def work() -> None:
+            with jobs_lock:
+                jobs[batch_id]["status"] = "running"
+            update_batch("running")
+            for index, (source, run_id) in enumerate(sources, start=1):
+                with jobs_lock:
+                    jobs[batch_id].update(done=index - 1, total=len(sources), current=run_id)
+                try:
+                    process_fn(source, runs / run_id, config, progress=lambda _done, _total: None)
+                except Exception as error:
+                    with jobs_lock:
+                        jobs[batch_id].update(status="error", error=f"{run_id}: {error}")
+                    update_batch("error")
+                    return
+            with jobs_lock:
+                jobs[batch_id].update(status="complete", done=len(sources))
+            update_batch("complete")
+
+        executor.submit(work)
+        return redirect(url_for("batch_detail", batch_id=batch_id))
+
     @app.get("/runs/<run_id>")
     def run_detail(run_id: str):
         folder = run_folder(run_id)
@@ -312,6 +448,11 @@ def create_app(data_dir: Path | None = None, process_fn=process_video) -> Flask:
         action = traffic_action(run_id, summary, labels, audited=run_id in AUDITED_RUNS)
         return render_template("run_detail.html", page="runs", run_id=run_id, summary=summary,
                                labels=labels, evaluation=evaluation, timeline=timeline,
+                               by_class=summary.get("by_class", {}),
+                               speeds=summary.get("speeds", []), reference_m=summary.get("reference_m"),
+                               od_pairs=summary.get("od_pairs", []), od_matrix=summary.get("od_matrix", {}),
+                               od_lines=sorted({p["origin"] for p in summary.get("od_pairs", [])} | {p["destination"] for p in summary.get("od_pairs", [])}),
+                               slowdowns=summary.get("slowdowns", []), slow_band=summary.get("slow_band"),
                                max_bin=max_bin, has_tracks=(folder / "tracks.csv").is_file(),
                                action=action,
                                model_label=Path(summary["model"]).stem.replace("yolo26s", "YOLO26s").replace("yolov8n", "YOLOv8n"))
@@ -344,6 +485,40 @@ def create_app(data_dir: Path | None = None, process_fn=process_video) -> Flask:
         page = traffic_brief_html(action, summary, frame_jpeg)
         return Response(page, mimetype="text/html",
                         headers={"Content-Disposition": f'attachment; filename="{run_id}-review-brief.html"'})
+
+    @app.get("/runs/<run_id>/download/report")
+    def run_report(run_id: str):
+        import cv2
+        folder = run_folder(run_id)
+        summary = json.loads((folder / "summary.json").read_text())
+        still_jpeg = None
+        try:
+            first_crossing = next((e["time_s"] for e in summary["events"] if e["type"] == "crossing"), None)
+            seconds = first_crossing if first_crossing is not None else summary["duration_s"] / 2
+            seconds = max(0.0, min(seconds, max(0.0, summary["duration_s"] - 0.1)))
+            video = folder / Path(summary["video"]).name
+            frame = frame_at(video, seconds)
+            ok, encoded = cv2.imencode(".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, 85])
+            if ok:
+                still_jpeg = encoded.tobytes()
+        except (ValueError, OSError, RuntimeError):
+            still_jpeg = None
+        report_path = folder / "report.html"
+        write_report(summary, report_path, still_jpeg=still_jpeg)
+        return send_file(report_path, as_attachment=True, download_name=f"vista-{run_id}-report.html")
+
+    @app.get("/runs/<run_id>/download/dataset")
+    def run_dataset(run_id: str):
+        from dataset_export import build_yolo_dataset
+        folder = run_folder(run_id)
+        summary = json.loads((folder / "summary.json").read_text())
+        if not (folder / "tracks.csv").is_file():
+            abort(404)
+        video, _ = source_video_for(folder, summary)
+        build_dir = folder / "yolo_dataset"
+        build_yolo_dataset(video, folder / "tracks.csv", build_dir)
+        archive_base = shutil.make_archive(str(folder / "yolo_dataset"), "zip", root_dir=str(build_dir))
+        return send_file(archive_base, as_attachment=True, download_name=f"vista-{run_id}-yolo-dataset.zip")
 
     @app.get("/runs/<run_id>/download/<kind>")
     def run_download(run_id: str, kind: str):
@@ -524,6 +699,79 @@ def create_app(data_dir: Path | None = None, process_fn=process_video) -> Flask:
         page = report_html(record, records, evidence)
         return Response(page, mimetype="text/html",
                         headers={"Content-Disposition": f'attachment; filename="{obs_id}-report.html"'})
+
+    @app.get("/live")
+    def live_page():
+        return render_template("live.html", page="live")
+
+    @app.post("/live/start")
+    def live_start():
+        from live import LiveSession
+
+        source = request.form.get("source", "0").strip()
+        if not source:
+            source = "0"
+        try:
+            src: int | str = int(source) if source.isdigit() else source
+        except ValueError:
+            src = source
+        try:
+            axis = request.form.get("axis", "y")
+            line_at = parsed_float(request.form, "line_at", .60)
+            confidence = parsed_float(request.form, "confidence", .25)
+            zone = tuple(parsed_float(request.form, key, default) for key, default in (
+                ("zone_x1", .05), ("zone_y1", .05), ("zone_x2", .95), ("zone_y2", .90)))
+            model_key = request.form.get("model", "yolo26s")
+            if model_key not in ("yolo26s", "yolov8n"):
+                raise ValueError("Choose a valid model")
+            session = LiveSession(
+                src, model=str(data / f"{model_key}.pt"), line_axis=axis, line_at=line_at,
+                zone=zone, confidence=confidence,
+                stop_seconds=parsed_float(request.form, "stop_seconds", 2.0),
+                max_stationary_speed_px_s=parsed_float(request.form, "stationary_px_s", 8.0),
+            )
+        except (ValueError, TypeError) as error:
+            return redirect(url_for("live_page", error=str(error)))
+        with live_lock:
+            if live["session"] is not None:
+                live["session"].stop()  # type: ignore[union-attr]
+            live["session"] = session
+            session.start()
+        return redirect(url_for("live_page"))
+
+    @app.post("/live/stop")
+    def live_stop():
+        with live_lock:
+            if live["session"] is not None:
+                live["session"].stop()  # type: ignore[union-attr]
+                live["session"] = None
+        return redirect(url_for("live_page"))
+
+    @app.get("/live/summary")
+    def live_summary():
+        with live_lock:
+            session = live["session"]
+        if session is None:
+            return jsonify(running=False)
+        return jsonify(session.summary())  # type: ignore[union-attr]
+
+    @app.get("/live/stream")
+    def live_stream():
+        def generate():
+            while True:
+                with live_lock:
+                    session = live["session"]
+                if session is None:
+                    time.sleep(0.2)
+                    continue
+                jpeg = session.frame_jpeg()  # type: ignore[union-attr]
+                if jpeg is None:
+                    time.sleep(0.1)
+                    continue
+                yield (b"--frame\r\nContent-Type: image/jpeg\r\n\r\n" + jpeg + b"\r\n")
+                time.sleep(1 / 15)
+
+        return Response(generate(), mimetype="multipart/x-mixed-replace; boundary=frame")
 
     @app.get("/health")
     def health():

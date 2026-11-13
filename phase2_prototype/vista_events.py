@@ -50,6 +50,15 @@ class StopEvent:
     vehicle_class: str
 
 
+@dataclass(frozen=True)
+class ODPair:
+    time_s: float
+    track_id: int
+    origin: str
+    destination: str
+    vehicle_class: str
+
+
 @dataclass
 class _TrackState:
     last: TrackPoint | None = None
@@ -173,3 +182,177 @@ class EventEngine:
             "crossings": [asdict(event) for event in self.crossings],
             "stops": [asdict(event) for event in self.stops],
         }
+
+
+class ODEngine:
+    """Record origin->destination pairs for tracks that cross two configured lines.
+
+    A line is identified as "line1" or "line2". When a track crosses two distinct
+    lines, the first is the origin and the second is the destination.
+    """
+
+    def __init__(
+        self,
+        line1_axis: str,
+        line1_pos: float,
+        line2_axis: str,
+        line2_pos: float,
+        *,
+        margin_px: float = 5.0,
+    ) -> None:
+        if margin_px < 0:
+            raise ValueError("margin_px must be nonnegative")
+        self.lines = {"line1": (line1_axis, line1_pos), "line2": (line2_axis, line2_pos)}
+        self.margin_px = margin_px
+        self._tracks: dict[int, dict] = {}
+        self.pairs: list[ODPair] = []
+
+    def _side(self, axis: str, position: float, x: float, y: float) -> int:
+        coordinate = x if axis == "x" else y
+        if coordinate < position - self.margin_px:
+            return -1
+        if coordinate > position + self.margin_px:
+            return 1
+        return 0
+
+    def update(self, point: TrackPoint) -> list[ODPair]:
+        track = self._tracks.setdefault(point.track_id, {"sides": {}, "order": [], "emitted": False})
+        for name, (axis, position) in self.lines.items():
+            side = self._side(axis, position, point.x, point.y)
+            previous = track["sides"].get(name)
+            if side != 0 and previous is not None and side != previous:
+                if name not in track["order"]:
+                    track["order"].append(name)
+            if side != 0:
+                track["sides"][name] = side
+        if len(track["order"]) >= 2 and not track["emitted"]:
+            pair = ODPair(point.time_s, point.track_id, track["order"][0], track["order"][1], point.vehicle_class)
+            self.pairs.append(pair)
+            track["emitted"] = True
+            return [pair]
+        return []
+
+    def result(self) -> dict:
+        matrix: dict[str, dict[str, int]] = {}
+        for pair in self.pairs:
+            matrix.setdefault(pair.origin, {}).setdefault(pair.destination, 0)
+            matrix[pair.origin][pair.destination] += 1
+        return {
+            "od_pairs": [asdict(pair) for pair in self.pairs],
+            "od_matrix": matrix,
+        }
+
+
+@dataclass(frozen=True)
+class SlowdownEvent:
+    time_s: float
+    track_id: int
+    vehicle_class: str
+    approach_px_s: float
+    min_px_s: float
+    ratio: float
+
+
+class SlowdownEngine:
+    """Flag relative slowdowns through a band without a real-world scale.
+
+    A track's free-flow image speed just before entering the band is compared
+    to its minimum speed inside the band. Because both are pixel speeds in the
+    same camera view, the scale cancels out — no calibration is required. A
+    slowdown is reported when the in-band speed falls to ``ratio`` (or less) of
+    the approach speed.
+    """
+
+    def __init__(
+        self,
+        axis: str,
+        start: float,
+        end: float,
+        *,
+        ratio: float = 0.5,
+        min_approach_px_s: float = 5.0,
+        window_s: float = 0.5,
+        approach_window_s: float = 1.5,
+        min_samples: int = 2,
+    ) -> None:
+        if axis not in ("x", "y"):
+            raise ValueError("axis must be x or y")
+        if start >= end:
+            raise ValueError("start must be less than end")
+        if not 0.0 < ratio <= 1.0:
+            raise ValueError("ratio must be in (0, 1]")
+        if min_approach_px_s < 0 or window_s <= 0 or approach_window_s <= 0 or min_samples < 2:
+            raise ValueError("invalid speed/window parameters")
+        self.axis = axis
+        self.start = start
+        self.end = end
+        self.ratio = ratio
+        self.min_approach_px_s = min_approach_px_s
+        self.window_s = window_s
+        self.approach_window_s = approach_window_s
+        self.min_samples = min_samples
+        self._tracks: dict[int, dict] = {}
+        self.events: list[SlowdownEvent] = []
+
+    def _position(self, point: TrackPoint) -> float:
+        return point.x if self.axis == "x" else point.y
+
+    def _inside(self, position: float) -> bool:
+        return self.start <= position <= self.end
+
+    def _speed(self, history: list[tuple[float, float, float]], point: TrackPoint) -> float | None:
+        if len(history) < self.min_samples:
+            return None
+        t0, x0, y0 = history[0]
+        dt = point.time_s - t0
+        if dt <= 0:
+            return None
+        return hypot(point.x - x0, point.y - y0) / dt
+
+    def update(self, point: TrackPoint) -> list[SlowdownEvent]:
+        track = self._tracks.setdefault(point.track_id, {
+            "history": [], "approach": [], "entered": False,
+            "entry_speed": None, "min_speed": None,
+        })
+        history = track["history"]
+        history.append((point.time_s, point.x, point.y))
+        while len(history) > 1 and point.time_s - history[0][0] > self.window_s:
+            history.pop(0)
+        speed = self._speed(history, point)
+        inside = self._inside(self._position(point))
+        emitted: list[SlowdownEvent] = []
+
+        if not track["entered"]:
+            if inside:
+                track["entered"] = True
+                approach = [value for _, value in track["approach"]]
+                track["entry_speed"] = max(approach) if approach else None
+                track["min_speed"] = speed
+                track["approach"] = []
+            elif speed is not None:
+                track["approach"].append((point.time_s, speed))
+                while len(track["approach"]) > 1 and point.time_s - track["approach"][0][0] > self.approach_window_s:
+                    track["approach"].pop(0)
+        else:
+            if inside and speed is not None:
+                track["min_speed"] = speed if track["min_speed"] is None else min(track["min_speed"], speed)
+            if not inside:
+                entry = track["entry_speed"]
+                low = track["min_speed"]
+                if entry is not None and low is not None and entry >= self.min_approach_px_s and entry > 0:
+                    ratio = low / entry
+                    if ratio <= self.ratio:
+                        event = SlowdownEvent(
+                            point.time_s, point.track_id, point.vehicle_class,
+                            round(entry, 1), round(low, 1), round(ratio, 3),
+                        )
+                        self.events.append(event)
+                        emitted.append(event)
+                track["entered"] = False
+                track["entry_speed"] = None
+                track["min_speed"] = None
+                track["approach"] = []
+        return emitted
+
+    def result(self) -> dict:
+        return {"slowdowns": [asdict(event) for event in self.events]}

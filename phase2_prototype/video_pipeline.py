@@ -6,16 +6,33 @@ import csv
 import json
 import sqlite3
 import subprocess
+from math import hypot
 from time import perf_counter
 from collections import Counter
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Callable
 
-from vista_events import CrossingEvent, EventEngine, StopEvent, TrackPoint, Zone
+from vista_events import CrossingEvent, EventEngine, ODPair, ODEngine, SlowdownEngine, StopEvent, TrackPoint, Zone
+from speed_estimator import SpeedEstimator
 
 
 VEHICLE_CLASSES = (2, 3, 5, 7)  # COCO: car, motorcycle, bus, truck
+CLASS_NAMES = ("car", "motorcycle", "bus", "truck")
+
+
+def _class_series(events: list[dict], duration_s: float) -> list[dict]:
+    """Per-class crossing counts in 5-second windows for charting."""
+    buckets: dict[int, dict[str, int]] = {}
+    for event in events:
+        if event["type"] != "crossing":
+            continue
+        bucket = int(event["time_s"] // 5) * 5
+        slot = buckets.setdefault(bucket, {name: 0 for name in CLASS_NAMES})
+        cls = event.get("vehicle_class", "car")
+        slot[cls] = slot.get(cls, 0) + 1
+    stops = list(range(0, max(5, int(duration_s) + 5), 5))
+    return [{"start": second, **{name: buckets.get(second, {}).get(name, 0) for name in CLASS_NAMES}} for second in stops]
 
 
 @dataclass(frozen=True)
@@ -31,6 +48,16 @@ class RunConfig:
     line_margin_px: float = 5.0
     max_frames: int | None = None
     device: str | None = None
+    ref_p1: tuple[float, float] | None = None
+    ref_p2: tuple[float, float] | None = None
+    ref_length_m: float | None = None
+    line2_axis: str | None = None
+    line2_at: float | None = None
+    slow_axis: str | None = None
+    slow_start: float | None = None
+    slow_end: float | None = None
+    slow_ratio: float = 0.5
+    slow_min_speed_px_s: float = 5.0
 
     def validate(self) -> None:
         if self.line_axis not in ("x", "y"):
@@ -44,6 +71,39 @@ class RunConfig:
             raise ValueError("confidence must be between 0 and 1")
         if self.max_frames is not None and self.max_frames <= 0:
             raise ValueError("max_frames must be positive")
+        has_ref = self.ref_p1 is not None or self.ref_p2 is not None or self.ref_length_m is not None
+        if has_ref:
+            if self.ref_p1 is None or self.ref_p2 is None or self.ref_length_m is None:
+                raise ValueError("Set ref_p1, ref_p2, and ref_length_m together")
+            if self.ref_length_m <= 0:
+                raise ValueError("ref_length_m must be positive")
+            for point in (self.ref_p1, self.ref_p2):
+                if len(point) != 2 or not (0 <= point[0] <= 1 and 0 <= point[1] <= 1):
+                    raise ValueError("Reference points must be normalized x,y in 0..1")
+            if self.ref_p1 == self.ref_p2:
+                raise ValueError("Reference points must be distinct")
+        has_line2 = self.line2_axis is not None or self.line2_at is not None
+        if has_line2:
+            if self.line2_axis is None or self.line2_at is None:
+                raise ValueError("Set line2_axis and line2_at together")
+            if self.line2_axis not in ("x", "y"):
+                raise ValueError("line2_axis must be x or y")
+            if not 0 < self.line2_at < 1:
+                raise ValueError("line2_at must be between 0 and 1")
+            if self.line2_axis == self.line_axis and abs(self.line2_at - self.line_at) < 1e-6:
+                raise ValueError("The second line must differ from the counting line")
+        has_slow = self.slow_axis is not None or self.slow_start is not None or self.slow_end is not None
+        if has_slow:
+            if self.slow_axis is None or self.slow_start is None or self.slow_end is None:
+                raise ValueError("Set slow_axis, slow_start, and slow_end together")
+            if self.slow_axis not in ("x", "y"):
+                raise ValueError("slow_axis must be x or y")
+            if not (0 < self.slow_start < self.slow_end < 1):
+                raise ValueError("slow_start and slow_end must satisfy 0 < slow_start < slow_end < 1")
+            if not 0 < self.slow_ratio <= 1:
+                raise ValueError("slow_ratio must be between 0 and 1")
+            if self.slow_min_speed_px_s < 0:
+                raise ValueError("slow_min_speed_px_s must be nonnegative")
 
 
 def _open_db(path: Path) -> sqlite3.Connection:
@@ -83,10 +143,20 @@ def _draw_overlay(frame, boxes, engine: EventEngine, config: RunConfig, zone: Zo
     else:
         y = round(config.line_at * height)
         cv2.line(frame, (0, y), (width, y), (20, 210, 225), 3)
+    if config.slow_axis is not None and config.slow_start is not None and config.slow_end is not None:
+        if config.slow_axis == "x":
+            cv2.line(frame, (round(config.slow_start * width), 0), (round(config.slow_start * width), height), (0, 128, 255), 2)
+            cv2.line(frame, (round(config.slow_end * width), 0), (round(config.slow_end * width), height), (0, 128, 255), 2)
+        else:
+            cv2.line(frame, (0, round(config.slow_start * height)), (width, round(config.slow_start * height)), (0, 128, 255), 2)
+            cv2.line(frame, (0, round(config.slow_end * height)), (width, round(config.slow_end * height)), (0, 128, 255), 2)
     for box in boxes:
-        x1, y1, x2, y2, track_id, label, confidence = box
+        x1, y1, x2, y2, track_id, label, confidence = box[:7]
+        speed_kmh = box[7] if len(box) > 7 else None
         cv2.rectangle(frame, (x1, y1), (x2, y2), (8, 190, 158), 2)
         caption = f"{label} #{track_id} {confidence:.2f}"
+        if speed_kmh is not None:
+            caption += f"  {speed_kmh:.0f} km/h"
         cv2.putText(frame, caption, (x1, max(18, y1 - 8)),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.52, (255, 255, 255), 3)
         cv2.putText(frame, caption, (x1, max(18, y1 - 8)),
@@ -142,6 +212,29 @@ def process_video(
         min_stop_s=config.stop_seconds,
     )
 
+    speed_estimator: SpeedEstimator | None = None
+    if config.ref_p1 is not None and config.ref_p2 is not None and config.ref_length_m is not None:
+        ax, ay = config.ref_p1[0] * width, config.ref_p1[1] * height
+        bx, by = config.ref_p2[0] * width, config.ref_p2[1] * height
+        ref_px = hypot(bx - ax, by - ay)
+        if ref_px <= 0:
+            capture.release()
+            raise ValueError("Reference points must be distinct")
+        speed_estimator = SpeedEstimator(ref_px / config.ref_length_m)
+
+    od_engine: ODEngine | None = None
+    if config.line2_axis is not None and config.line2_at is not None:
+        line2_pos = config.line2_at * (width if config.line2_axis == "x" else height)
+        od_engine = ODEngine(config.line_axis, line, config.line2_axis, line2_pos, margin_px=config.line_margin_px)
+
+    slow_engine: SlowdownEngine | None = None
+    if config.slow_axis is not None:
+        slow_axis_len = width if config.slow_axis == "x" else height
+        slow_engine = SlowdownEngine(
+            config.slow_axis, config.slow_start * slow_axis_len, config.slow_end * slow_axis_len,
+            ratio=config.slow_ratio, min_approach_px_s=config.slow_min_speed_px_s,
+        )
+
     raw_video = output_dir / "annotated_raw.mp4"
     writer = cv2.VideoWriter(str(raw_video), cv2.VideoWriter_fourcc(*"mp4v"), fps, (width, height))
     if not writer.isOpened():
@@ -185,7 +278,9 @@ def process_video(
                     label = model.names[class_id]
                     confidence = float(boxes.conf[index].item())
                     x1b, y1b, x2b, y2b = [int(v) for v in boxes.xyxy[index].tolist()]
-                    drawn_boxes.append((x1b, y1b, x2b, y2b, track_id, label, confidence))
+                    point = TrackPoint(time_s, track_id, (x1b + x2b) / 2, y2b, label)
+                    speed_kmh = speed_estimator.update(track_id, time_s, point.x, point.y, label) if speed_estimator else None
+                    drawn_boxes.append((x1b, y1b, x2b, y2b, track_id, label, confidence, speed_kmh))
                     tracks_writer.writerow({
                         "frame": frames + 1, "time_s": round(time_s, 3), "track_id": track_id,
                         "vehicle_class": label, "confidence": round(confidence, 3),
@@ -193,7 +288,6 @@ def process_video(
                     })
                     tracked_boxes += 1
                     unique_tracks.add(track_id)
-                    point = TrackPoint(time_s, track_id, (x1b + x2b) / 2, y2b, label)
                     for event in engine.update(point):
                         event_type = "crossing" if isinstance(event, CrossingEvent) else "stop"
                         db.execute(
@@ -203,6 +297,10 @@ def process_video(
                              event.direction if event_type == "crossing" else None,
                              event.duration_s if isinstance(event, StopEvent) else None),
                         )
+                    if od_engine:
+                        od_engine.update(point)
+                    if slow_engine:
+                        slow_engine.update(point)
             second = int(time_s)
             if second > last_sample_second:
                 db.execute("INSERT INTO samples(run_id,time_s,stopped_count) VALUES(?,?,?)",
@@ -228,6 +326,11 @@ def process_video(
     events += [dict(type="stop", **asdict(e)) for e in engine.stops]
     events.sort(key=lambda e: e["time_s"])
     counts = Counter(e["direction"] for e in events if e["type"] == "crossing")
+    class_counts = Counter(e["vehicle_class"] for e in events if e["type"] == "crossing")
+    stop_class_counts = Counter(e["vehicle_class"] for e in events if e["type"] == "stop")
+    speed_result = speed_estimator.result() if speed_estimator else {"per_track": [], "series": []}
+    od_result = od_engine.result() if od_engine else {"od_pairs": [], "od_matrix": {}}
+    slow_result = slow_engine.result() if slow_engine else {"slowdowns": []}
     summary = {
         "source": video_path.name,
         "model": config.model,
@@ -245,6 +348,17 @@ def process_video(
         "crossings": len(engine.crossings),
         "stops": len(engine.stops),
         "by_direction": dict(counts),
+        "by_class": dict(class_counts),
+        "by_class_stops": dict(stop_class_counts),
+        "class_series": _class_series(events, frames / fps),
+        "speeds": speed_result["per_track"],
+        "speed_series": speed_result["series"],
+        "reference_m": config.ref_length_m,
+        "od_pairs": od_result["od_pairs"],
+        "od_matrix": od_result["od_matrix"],
+        "slowdowns": slow_result["slowdowns"],
+        "slowdown_count": len(slow_result["slowdowns"]),
+        "slow_band": {"axis": config.slow_axis, "start": config.slow_start, "end": config.slow_end, "ratio": config.slow_ratio} if config.slow_axis else None,
         "config": asdict(config),
         "events": events,
     }

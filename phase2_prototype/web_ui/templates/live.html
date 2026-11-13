@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+{% block title %}Live analysis{% endblock %}
+{% block breadcrumb %}Live analysis{% endblock %}
+{% block content %}
+<div class="page-heading"><div><span class="eyebrow">LIVE / WEBCAM + RTSP</span><h1>Live analysis</h1><p>Run the pretrained model on a webcam or RTSP stream. The feed refreshes in place; counts appear in the overlay.</p></div></div>
+{% if request.args.get('error') %}<div class="alert error">{{ request.args.get('error') }}</div>{% endif %}
+
+<section class="panel form-panel">
+  <div class="panel-top"><div><span class="eyebrow">START A SESSION</span><h2>Source and detection</h2></div></div>
+  <form action="{{ url_for('live_start') }}" method="post">
+    <div class="form-grid">
+      <label class="field field-wide"><span class="field-label">SOURCE</span><input type="text" name="source" value="0" placeholder="0 for webcam, or rtsp://…"><small>Enter a webcam index (e.g. 0) or an RTSP URL.</small></label>
+      <label class="field"><span class="field-label">MODEL</span><select name="model"><option value="yolo26s">YOLO26s · primary</option><option value="yolov8n">YOLOv8n · baseline</option></select></label>
+      <label class="field"><span class="field-label">COUNTING LINE</span><select name="axis"><option value="y">Horizontal</option><option value="x">Vertical</option></select></label>
+      <label class="field"><span class="field-label">LINE POSITION (0–1)</span><input type="number" name="line_at" min="0.05" max="0.95" step="0.01" value="0.60"></label>
+      <label class="field"><span class="field-label">DETECTION CONFIDENCE</span><input type="number" name="confidence" min="0.05" max="0.70" step="0.05" value="0.25"></label>
+    </div>
+    <div class="form-submit"><button class="button button-dark" type="submit">Start session <span>↗</span></button></div>
+  </form>
+  <form action="{{ url_for('live_stop') }}" method="post" style="margin-top:10px"><button class="button button-outline" type="submit">Stop session</button></form>
+  </form>
+</section>
+
+<section class="panel">
+  <div class="panel-top"><div><span class="eyebrow">LIVE FEED</span><h2>Stream</h2></div><span class="badge">MJPEG · NO JAVASCRIPT</span></div>
+  <div class="live-frame"><img src="{{ url_for('live_stream') }}" alt="Live annotated feed"><p class="panel-caption">Start a session above. If nothing appears, the source could not be opened — check the webcam index or RTSP URL.</p></div>
+</section>
+<div class="evidence-note"><strong>Live limits</strong><p>This is a rolling detector view, not persistent evidence. Counts reset when you stop the session. RTSP reliability and CPU load depend on the source and machine; the stream reconnects on drop but may drop frames.</p></div>
+{% endblock %}

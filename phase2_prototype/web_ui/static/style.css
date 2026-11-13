@@ -171,7 +171,7 @@ p{color:var(--ink-soft)}
 .source-options{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
 .source-option{display:flex;gap:11px;align-items:flex-start;padding:13px;border:1px solid var(--line);border-radius:8px;cursor:pointer;min-height:67px;position:relative}
 .source-option:has(input:checked){border-color:#5ca897;background:#f1f9f4;box-shadow:inset 0 0 0 1px #5ca897}
-.source-option input{position:absolute;opacity:0;pointer-events:none}
+.source-option input{position:absolute;inset:0;width:100%;height:100%;margin:0;opacity:0;cursor:pointer}
 .source-radio{width:15px;height:15px;flex:0 0 15px;border-radius:50%;border:1.5px solid #9eb2a9;margin-top:3px;position:relative}
 .source-option:has(input:checked) .source-radio{border-color:var(--teal)}
 .source-option:has(input:checked) .source-radio:after{content:"";position:absolute;inset:3px;border-radius:50%;background:var(--teal)}
@@ -403,7 +403,6 @@ body::before{content:"";position:fixed;inset:-18%;pointer-events:none;background
 
 .preview-item{display:none}
 .preview-signal{display:block}
-#analysis-form .upload-wrap{display:none}
 @supports selector(:has(*)){
   .analyze-layout:has(input[name="source"][value="upload"]:checked) .upload-wrap{display:block}
   .analyze-layout:has(input[name="source"]:checked) .preview-item{display:none}
