@@ -8,6 +8,41 @@ import time
 from vista_events import EventEngine, TrackPoint, Zone
 
 
+def _is_youtube(url: str) -> bool:
+    return "youtube.com/watch" in url or "youtu.be/" in url
+
+
+def resolve_youtube_stream(url: str) -> str:
+    """Resolve a YouTube watch URL to a direct HLS URL OpenCV can open.
+
+    Picks the highest variant at or below 480p so CPU-only inference can
+    keep up; live streams expose only HLS.
+    """
+    try:
+        import yt_dlp
+    except ImportError as error:
+        raise RuntimeError("yt-dlp is not installed (pip install yt-dlp)") from error
+    opts = {
+        "quiet": True,
+        "no_warnings": True,
+        "skip_download": True,
+        "noplaylist": True,
+    }
+    with yt_dlp.YoutubeDL(opts) as ydl:
+        info = ydl.extract_info(url, download=False)
+    formats = info.get("formats") or []
+    video = [f for f in formats
+             if f.get("protocol") in ("m3u8", "m3u8_native") and f.get("height")]
+    if not video:
+        direct = info.get("url") or (formats[-1].get("url") if formats else None)
+        if not direct:
+            raise RuntimeError("No playable stream found at the YouTube URL")
+        return direct
+    video.sort(key=lambda f: f["height"])
+    best = next((f for f in reversed(video) if f["height"] <= 480), video[0])
+    return best["url"]
+
+
 class LiveSession:
     """Run the detector on a live source and hold the latest annotated frame."""
 
@@ -61,13 +96,18 @@ class LiveSession:
         self._thread = threading.Thread(target=self._run, daemon=True)
         self._thread.start()
 
+    def _resolved_source(self):
+        if isinstance(self.source, str) and _is_youtube(self.source):
+            return resolve_youtube_stream(self.source)
+        return self.source
+
     def _run(self) -> None:
         import cv2
         from ultralytics import YOLO
 
         try:
             model = YOLO(self.model_name)
-            capture = cv2.VideoCapture(self.source)
+            capture = cv2.VideoCapture(self._resolved_source())
             if not capture.isOpened():
                 raise RuntimeError(f"Cannot open source: {self.source}")
             while self._running:
@@ -76,7 +116,7 @@ class LiveSession:
                     if isinstance(self.source, str):
                         capture.release()
                         time.sleep(1.0)
-                        capture = cv2.VideoCapture(self.source)
+                        capture = cv2.VideoCapture(self._resolved_source())
                         continue
                     break
                 self._width = frame.shape[1]

@@ -2,14 +2,14 @@
 {% block title %}Live analysis{% endblock %}
 {% block breadcrumb %}Live analysis{% endblock %}
 {% block content %}
-<div class="page-heading"><div><span class="eyebrow">LIVE / WEBCAM + RTSP</span><h1>Live analysis</h1><p>Run the pretrained model on a webcam or RTSP stream. The feed refreshes in place; counts appear in the overlay.</p></div></div>
+<div class="page-heading"><div><span class="eyebrow">LIVE / WEBCAM + RTSP + YOUTUBE</span><h1>Live analysis</h1><p>Run the pretrained model on a webcam, RTSP stream, or YouTube live stream. The feed refreshes in place; counts appear in the overlay.</p></div></div>
 {% if request.args.get('error') %}<div class="alert error">{{ request.args.get('error') }}</div>{% endif %}
 
 <section class="panel form-panel">
   <div class="panel-top"><div><span class="eyebrow">START A SESSION</span><h2>Source and detection</h2></div></div>
   <form action="{{ url_for('live_start') }}" method="post">
     <div class="form-grid">
-      <label class="field field-wide"><span class="field-label">SOURCE</span><input type="text" name="source" value="0" placeholder="0 for webcam, or rtsp://…"><small>Enter a webcam index (e.g. 0) or an RTSP URL.</small></label>
+      <label class="field field-wide"><span class="field-label">SOURCE</span><input type="text" name="source" value="0" placeholder="0, rtsp://…, or a YouTube URL"><small>Webcam index (e.g. 0), an RTSP URL, or a YouTube watch/live URL (resolved to a 480p stream via yt-dlp).</small></label>
       <label class="field"><span class="field-label">MODEL</span><select name="model"><option value="yolo26s">YOLO26s · primary</option><option value="yolov8n">YOLOv8n · baseline</option></select></label>
       <label class="field"><span class="field-label">COUNTING LINE</span><select name="axis"><option value="y">Horizontal</option><option value="x">Vertical</option></select></label>
       <label class="field"><span class="field-label">LINE POSITION (0–1)</span><input type="number" name="line_at" min="0.05" max="0.95" step="0.01" value="0.60"></label>
