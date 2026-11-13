@@ -19,7 +19,7 @@
     <div class="form-grid">
       <label class="field"><span class="field-label">MODEL</span><select name="model"><option value="yolo26s">YOLO26s · primary</option><option value="yolov8n">YOLOv8n · baseline</option></select></label>
       <label class="field"><span class="field-label">COUNTING LINE</span><select name="axis"><option value="y">Horizontal</option><option value="x">Vertical</option></select></label>
-      <label class="field field-wide"><span class="field-label">LINE POSITION (0–1)</span><input type="number" name="line_at" id="line-at" min="0.05" max="0.95" step="0.01" value="0.60"><span class="field-help">0.60 means 60% across the image. Uncheck the sample preset to use this value.</span></label>
+      <label class="field field-wide"><span class="field-label">LINE POSITION (0–1)</span><input type="number" name="line_at" id="line-at" min="0.05" max="0.95" step="0.01" value="0.60"><span class="field-help">0.60 means 60% across the image. Editing a placement value turns off the sample preset.</span></label>
       <label class="field"><span class="field-label">DETECTION CONFIDENCE</span><input type="number" name="confidence" min="0.05" max="0.70" step="0.05" value="0.25"></label>
       <label class="field"><span class="field-label">FRAME LIMIT</span><input type="number" name="max_frames" min="0" step="100" value="0"><small>0 = whole video</small></label>
     </div>
@@ -106,9 +106,31 @@
     return l;
   }
 
-  function draw() {
+  function getSourceKey() {
     const sourceEl = document.querySelector('input[name="source"]:checked');
-    const sourceKey = sourceEl ? sourceEl.value : null;
+    return sourceEl ? sourceEl.value : null;
+  }
+  function setField(name, value) {
+    const field = document.querySelector('[name="' + name + '"]');
+    if (field) field.value = value;
+  }
+  const PRESET_FIELDS = ['axis', 'line_at', 'zone_x1', 'zone_y1', 'zone_x2', 'zone_y2'];
+  function applyPreset() {
+    const sourceKey = getSourceKey();
+    const usePreset = document.querySelector('input[name="use_scene_preset"]').checked;
+    if (usePreset && sourceKey && SCENE_PRESETS[sourceKey]) {
+      const p = SCENE_PRESETS[sourceKey];
+      setField('axis', p[0]);
+      setField('line_at', p[1]);
+      setField('zone_x1', p[2][0]);
+      setField('zone_y1', p[2][1]);
+      setField('zone_x2', p[2][2]);
+      setField('zone_y2', p[2][3]);
+    }
+  }
+
+  function draw() {
+    const sourceKey = getSourceKey();
     if (sourceKey && POSTER_URLS[sourceKey]) {
       img.src = POSTER_URLS[sourceKey];
       img.style.display = 'block';
@@ -121,16 +143,9 @@
     svg.innerHTML = '';
     const frag = document.createDocumentFragment();
 
-    const usePreset = document.querySelector('input[name="use_scene_preset"]').checked;
-    let axis, lineAt, zone;
-    if (usePreset && sourceKey && SCENE_PRESETS[sourceKey]) {
-      const p = SCENE_PRESETS[sourceKey];
-      axis = p[0]; lineAt = p[1]; zone = p[2];
-    } else {
-      axis = document.querySelector('[name="axis"]').value;
-      lineAt = num('line_at', 0.6);
-      zone = [num('zone_x1', 0.45), num('zone_y1', 0.05), num('zone_x2', 1.0), num('zone_y2', 1.0)];
-    }
+    const axis = document.querySelector('[name="axis"]').value;
+    const lineAt = num('line_at', 0.6);
+    const zone = [num('zone_x1', 0.45), num('zone_y1', 0.05), num('zone_x2', 1.0), num('zone_y2', 1.0)];
 
     const z = el('rect');
     z.setAttribute('x', zone[0] * 100); z.setAttribute('y', zone[1] * 100);
@@ -190,12 +205,21 @@
     'ref_length_m', 'ref_p1_x', 'ref_p1_y', 'ref_p2_x', 'ref_p2_y'];
   fieldNames.forEach(function (name) {
     const field = document.querySelector('[name="' + name + '"]');
-    if (field) { field.addEventListener('input', draw); field.addEventListener('change', draw); }
-  });
-  document.querySelectorAll('input[name="source"], input[name="use_scene_preset"]').forEach(function (field) {
+    if (!field) return;
+    field.addEventListener('input', function () {
+      if (PRESET_FIELDS.indexOf(name) !== -1) {
+        document.querySelector('input[name="use_scene_preset"]').checked = false;
+      }
+      draw();
+    });
     field.addEventListener('change', draw);
   });
+  document.querySelectorAll('input[name="source"]').forEach(function (field) {
+    field.addEventListener('change', function () { applyPreset(); draw(); });
+  });
+  document.querySelector('input[name="use_scene_preset"]').addEventListener('change', function () { applyPreset(); draw(); });
 
+  applyPreset();
   draw();
 })();
 </script>
